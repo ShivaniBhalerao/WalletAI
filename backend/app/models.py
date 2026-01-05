@@ -1,4 +1,5 @@
 import uuid
+from datetime import date
 
 from pydantic import EmailStr
 from sqlmodel import Field, Relationship, SQLModel
@@ -44,6 +45,7 @@ class User(UserBase, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     hashed_password: str
     items: list["Item"] = Relationship(back_populates="owner", cascade_delete=True)
+    accounts: list["Account"] = Relationship(back_populates="user", cascade_delete=True)
 
 
 # Properties to return via API, id is always required
@@ -111,3 +113,93 @@ class TokenPayload(SQLModel):
 class NewPassword(SQLModel):
     token: str
     new_password: str = Field(min_length=8, max_length=128)
+
+
+# Shared properties
+class AccountBase(SQLModel):
+    name: str = Field(max_length=255)
+    official_name: str = Field(max_length=255)
+    type: str = Field(max_length=255)
+    current_balance: float = Field(default=0.0)
+    currency: str = Field(max_length=255)
+
+
+# Properties to receive on account creation
+class AccountCreate(AccountBase):
+    pass
+
+
+# Properties to receive on account update
+class AccountUpdate(AccountBase):
+    name: str | None = Field(default=None, max_length=255)  # type: ignore
+    official_name: str | None = Field(default=None, max_length=255)  # type: ignore
+    type: str | None = Field(default=None, max_length=255)  # type: ignore
+    current_balance: float | None = Field(default=None)
+    currency: str | None = Field(default=None, max_length=255)  # type: ignore
+
+
+# Database model, database table inferred from class name
+class Account(AccountBase, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id", nullable=False, ondelete="CASCADE"
+    )
+    user: User | None = Relationship(back_populates="accounts")
+    transactions: list["Transaction"] = Relationship(back_populates="account", cascade_delete=True)
+
+
+# Properties to return via API, id is always required
+class AccountPublic(AccountBase):
+    id: uuid.UUID
+    user_id: uuid.UUID
+    name: str
+    official_name: str
+    type: str
+    current_balance: float
+    currency: str
+
+
+# Shared properties
+class TransactionBase(SQLModel):
+    amount: float
+    auth_date: date
+    merchant_name: str = Field(max_length=255)
+    pending: bool = Field(default=False)
+    category: str = Field(max_length=255)
+    currency: str = Field(max_length=10, default="USD")
+
+
+# Properties to receive on transaction creation
+class TransactionCreate(TransactionBase):
+    pass
+
+
+# Properties to receive on transaction update
+class TransactionUpdate(TransactionBase):
+    amount: float | None = Field(default=None)
+    auth_date: date | None = Field(default=None)
+    merchant_name: str | None = Field(default=None, max_length=255)  # type: ignore
+    pending: bool | None = Field(default=None)
+    category: str | None = Field(default=None, max_length=255)  # type: ignore
+    currency: str | None = Field(default=None, max_length=10)  # type: ignore
+
+
+# Database model, database table inferred from class name
+class Transaction(TransactionBase, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    account_id: uuid.UUID = Field(
+        foreign_key="account.id", nullable=False, ondelete="CASCADE"
+    )
+    account: Account | None = Relationship(back_populates="transactions")
+
+
+# Properties to return via API, id is always required
+class TransactionPublic(TransactionBase):
+    id: uuid.UUID
+    account_id: uuid.UUID
+    amount: float
+    auth_date: date
+    merchant_name: str
+    pending: bool
+    category: str
+    currency: str
