@@ -12,6 +12,7 @@ Endpoints:
 """
 
 import logging
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
@@ -70,9 +71,14 @@ def get_link_token(
             f"Link token created successfully for user: {current_user.id}"
         )
         
+        # Convert expiration datetime to ISO format string if needed
+        expiration = result["expiration"]
+        if isinstance(expiration, datetime):
+            expiration = expiration.isoformat()
+        
         return PlaidLinkTokenResponse(
             link_token=result["link_token"],
-            expiration=result["expiration"]
+            expiration=expiration
         )
         
     except SyncOrchestratorError as e:
