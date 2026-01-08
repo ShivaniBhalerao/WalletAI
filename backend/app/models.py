@@ -46,6 +46,7 @@ class User(UserBase, table=True):
     hashed_password: str
     items: list["Item"] = Relationship(back_populates="owner", cascade_delete=True)
     accounts: list["Account"] = Relationship(back_populates="user", cascade_delete=True)
+    plaid_items: list["PlaidItem"] = Relationship(back_populates="user", cascade_delete=True)
 
 
 # Properties to return via API, id is always required
@@ -94,6 +95,53 @@ class ItemsPublic(SQLModel):
     count: int
 
 
+# Shared properties for PlaidItem
+class PlaidItemBase(SQLModel):
+    """Base model for Plaid item representing a bank connection."""
+    item_id: str = Field(max_length=255, index=True)
+    institution_name: str = Field(max_length=255)
+    access_token: str = Field(max_length=512)  # Encrypted Plaid access token
+    cursor: str | None = Field(default=None, max_length=512)  # Sync cursor for incremental updates
+
+
+# Properties to receive on PlaidItem creation
+class PlaidItemCreate(PlaidItemBase):
+    """Schema for creating a new Plaid item."""
+    pass
+
+
+# Properties to receive on PlaidItem update
+class PlaidItemUpdate(SQLModel):
+    """Schema for updating a Plaid item."""
+    institution_name: str | None = Field(default=None, max_length=255)  # type: ignore
+    access_token: str | None = Field(default=None, max_length=512)  # type: ignore
+    cursor: str | None = Field(default=None, max_length=512)  # type: ignore
+
+
+# Database model, database table inferred from class name
+class PlaidItem(PlaidItemBase, table=True):
+    """
+    Database model for storing Plaid access tokens and sync state.
+    Represents a connection between a user and a financial institution via Plaid.
+    """
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id: uuid.UUID = Field(
+        foreign_key="user.id", nullable=False, ondelete="CASCADE", index=True
+    )
+    user: User | None = Relationship(back_populates="plaid_items")
+    accounts: list["Account"] = Relationship(back_populates="plaid_item", cascade_delete=True)
+
+
+# Properties to return via API, id is always required
+class PlaidItemPublic(SQLModel):
+    """Public schema for PlaidItem (excludes sensitive access_token)."""
+    id: uuid.UUID
+    user_id: uuid.UUID
+    item_id: str
+    institution_name: str
+    cursor: str | None
+
+
 # Generic message
 class Message(SQLModel):
     message: str
@@ -122,6 +170,7 @@ class AccountBase(SQLModel):
     type: str = Field(max_length=255)
     current_balance: float = Field(default=0.0)
     currency: str = Field(max_length=255)
+    plaid_account_id: str | None = Field(default=None, max_length=255, unique=True, index=True)
 
 
 # Properties to receive on account creation
@@ -136,6 +185,7 @@ class AccountUpdate(AccountBase):
     type: str | None = Field(default=None, max_length=255)  # type: ignore
     current_balance: float | None = Field(default=None)
     currency: str | None = Field(default=None, max_length=255)  # type: ignore
+    plaid_account_id: str | None = Field(default=None, max_length=255)  # type: ignore
 
 
 # Database model, database table inferred from class name
@@ -144,7 +194,11 @@ class Account(AccountBase, table=True):
     user_id: uuid.UUID = Field(
         foreign_key="user.id", nullable=False, ondelete="CASCADE"
     )
+    plaid_item_id: uuid.UUID | None = Field(
+        default=None, foreign_key="plaiditem.id", nullable=True, ondelete="CASCADE", index=True
+    )
     user: User | None = Relationship(back_populates="accounts")
+    plaid_item: PlaidItem | None = Relationship(back_populates="accounts")
     transactions: list["Transaction"] = Relationship(back_populates="account", cascade_delete=True)
 
 
@@ -152,11 +206,13 @@ class Account(AccountBase, table=True):
 class AccountPublic(AccountBase):
     id: uuid.UUID
     user_id: uuid.UUID
+    plaid_item_id: uuid.UUID | None
     name: str
     official_name: str
     type: str
     current_balance: float
     currency: str
+    plaid_account_id: str | None
 
 
 # Shared properties
@@ -167,6 +223,7 @@ class TransactionBase(SQLModel):
     pending: bool = Field(default=False)
     category: str = Field(max_length=255)
     currency: str = Field(max_length=10, default="USD")
+    plaid_transaction_id: str | None = Field(default=None, max_length=255, unique=True, index=True)
 
 
 # Properties to receive on transaction creation
@@ -182,6 +239,7 @@ class TransactionUpdate(TransactionBase):
     pending: bool | None = Field(default=None)
     category: str | None = Field(default=None, max_length=255)  # type: ignore
     currency: str | None = Field(default=None, max_length=10)  # type: ignore
+    plaid_transaction_id: str | None = Field(default=None, max_length=255)  # type: ignore
 
 
 # Database model, database table inferred from class name
@@ -203,3 +261,31 @@ class TransactionPublic(TransactionBase):
     pending: bool
     category: str
     currency: str
+    plaid_transaction_id: str | None
+
+
+# Plaid API response models
+class PlaidLinkTokenResponse(SQLModel):
+    """Response model for Plaid Link token creation."""
+    link_token: str
+    expiration: str
+
+
+class PlaidExchangeRequest(SQLModel):
+    """Request model for exchanging Plaid public token."""
+    public_token: str
+    institution_name: str
+
+
+class PlaidSyncResponse(SQLModel):
+    """Response model for Plaid transaction sync operation."""
+    total_added: int
+    total_modified: int
+    total_removed: int
+    items_synced: int
+
+
+class PlaidStatusResponse(SQLModel):
+    """Response model for Plaid connection status."""
+    is_connected: bool
+    items: list[PlaidItemPublic]

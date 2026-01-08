@@ -143,6 +143,9 @@ You can set several variables, like:
 * `POSTGRES_USER`: The Postgres user, you can leave the default.
 * `POSTGRES_DB`: The database name to use for this application. You can leave the default of `app`.
 * `SENTRY_DSN`: The DSN for Sentry, if you are using it.
+* `PLAID_CLIENT_ID`: Your Plaid API client ID. You can obtain this from your [Plaid Dashboard](https://dashboard.plaid.com/).
+* `PLAID_SECRET`: Your Plaid API secret key. This should match the environment you're using (`PLAID_ENV`).
+* `PLAID_ENV`: The Plaid environment to use. Options are `sandbox` (for development/testing), `development`, or `production`. Defaults to `sandbox`.
 
 ## GitHub Actions Environment Variables
 

@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     FRONTEND_HOST: str = "http://localhost:5173"
     ENVIRONMENT: Literal["local", "staging", "production"] = "local"
 
+    # Plaid API configuration
+    PLAID_CLIENT_ID: str = "test-client-id"  # Default for testing
+    PLAID_SECRET: str = "test-secret"  # Default for testing
+    PLAID_ENV: Literal["sandbox", "development", "production"] = "sandbox"
+
     BACKEND_CORS_ORIGINS: Annotated[
         list[AnyUrl] | str, BeforeValidator(parse_cors)
     ] = []

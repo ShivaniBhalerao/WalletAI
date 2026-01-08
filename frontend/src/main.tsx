@@ -19,7 +19,9 @@ OpenAPI.TOKEN = async () => {
 }
 
 const handleApiError = (error: Error) => {
-  if (error instanceof ApiError && [401, 403].includes(error.status)) {
+  // Handle authentication errors: 401 (Unauthorized), 403 (Forbidden), 
+  // or 404 from authenticated endpoints (User not found)
+  if (error instanceof ApiError && [401, 403, 404].includes(error.status)) {
     localStorage.removeItem("access_token")
     window.location.href = "/login"
   }
