@@ -262,3 +262,30 @@ class TransactionPublic(TransactionBase):
     category: str
     currency: str
     plaid_transaction_id: str | None
+
+
+# Plaid API response models
+class PlaidLinkTokenResponse(SQLModel):
+    """Response model for Plaid Link token creation."""
+    link_token: str
+    expiration: str
+
+
+class PlaidExchangeRequest(SQLModel):
+    """Request model for exchanging Plaid public token."""
+    public_token: str
+    institution_name: str
+
+
+class PlaidSyncResponse(SQLModel):
+    """Response model for Plaid transaction sync operation."""
+    total_added: int
+    total_modified: int
+    total_removed: int
+    items_synced: int
+
+
+class PlaidStatusResponse(SQLModel):
+    """Response model for Plaid connection status."""
+    is_connected: bool
+    items: list[PlaidItemPublic]
