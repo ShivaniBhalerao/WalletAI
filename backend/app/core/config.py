@@ -42,6 +42,15 @@ class Settings(BaseSettings):
     PLAID_SECRET: str = "test-secret"  # Default for testing
     PLAID_ENV: Literal["sandbox", "development", "production"] = "sandbox"
 
+    GOOGLE_API_KEY: str | None = None
+    GEMINI_MODEL: str = "gemini-2.5-flash"
+    GEMINI_TEMPERATURE: float = 0.7
+    GEMINI_MAX_TOKENS: int = 2048
+    
+    # Agent Settings
+    MAX_CONVERSATION_HISTORY: int = 10  # Keep last 10 messages for context
+    ENABLE_CLARIFICATION: bool = True  # Enable clarifying questions
+    
     BACKEND_CORS_ORIGINS: Annotated[
         list[AnyUrl] | str, BeforeValidator(parse_cors)
     ] = []

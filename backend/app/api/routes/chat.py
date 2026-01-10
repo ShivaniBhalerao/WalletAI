@@ -11,8 +11,11 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
+from langchain_core.messages import AIMessage, HumanMessage
 from pydantic import BaseModel
 
+from app.ai.agent import process_message
+from app.ai.config import AIConfig
 from app.api.deps import CurrentUser
 
 # Configure logging
@@ -51,7 +54,67 @@ class ChatRequest(BaseModel):
     messages: list[ChatMessage]
 
 
-async def generate_mock_response(user_message: str, user_id: int) -> str:
+async def generate_agent_response(
+    user_message: str, 
+    user_id: uuid.UUID,
+    conversation_history: list[ChatMessage] | None = None
+) -> str:
+    """
+    Generate response using the LangGraph agent
+    
+    Args:
+        user_message: The user's input message
+        user_id: The authenticated user's UUID
+        conversation_history: Optional conversation history for context
+        
+    Returns:
+        Agent's response string
+    """
+    logger.info(f"Generating agent response for user {user_id}: {user_message[:50]}...")
+    
+    try:
+        # Check if AI is configured
+        if not AIConfig.validate_config():
+            logger.warning("AI not configured, falling back to mock response")
+            #return await generate_mock_response(user_message, user_id)
+        
+        # Convert conversation history to LangChain messages
+        messages = []
+        if conversation_history:
+            for msg in conversation_history[-AIConfig.MAX_CONVERSATION_HISTORY:]:
+                content = msg.get_content()
+                if msg.role == "user":
+                    messages.append(HumanMessage(content=content))
+                elif msg.role == "assistant":
+                    messages.append(AIMessage(content=content))
+        
+        # Add current message if not already in history
+        if not messages or messages[-1].content != user_message:
+            messages.append(HumanMessage(content=user_message))
+        
+        # Process through agent
+        result = process_message(
+            user_id=user_id,
+            messages=messages
+        )
+        
+        # Extract response
+        if result["messages"]:
+            response = result["messages"][-1].content
+            logger.info(f"Agent response generated: {len(response)} characters")
+            return response
+        else:
+            logger.error("No response from agent")
+            return "I apologize, but I couldn't generate a response. Please try again."
+            
+    except Exception as e:
+        logger.error(f"Error generating agent response: {e}", exc_info=True)
+        # Fallback to mock response on error
+        logger.info("Falling back to mock response due to error")
+      #  return await generate_mock_response(user_message, user_id)
+
+
+async def generate_mock_response(user_message: str, user_id: uuid.UUID) -> str:
     """
     Generate a mock response based on the user's message
     In production, this would call the LangChain agent with user data
@@ -122,7 +185,11 @@ async def generate_mock_response(user_message: str, user_id: int) -> str:
         )
 
 
-async def stream_response_generator(user_message: str, user_id: int):
+async def stream_response_generator(
+    user_message: str, 
+    user_id: uuid.UUID,
+    conversation_history: list[ChatMessage] | None = None
+):
     """
     Generate streaming NDJSON response in AI SDK format
     Yields chunks of JSON objects, each on a new line
@@ -140,8 +207,8 @@ async def stream_response_generator(user_message: str, user_id: int):
         JSON chunks in NDJSON format (newline-delimited JSON)
     """
     try:
-        # Generate the full response
-        full_response = await generate_mock_response(user_message, user_id)
+        # Generate the full response using agent
+        full_response = await generate_agent_response(user_message, user_id, conversation_history)
         
         # Generate a unique message ID
         message_id = str(uuid.uuid4())
@@ -239,10 +306,10 @@ async def chat_endpoint(
     # Log chat interaction
     logger.debug(f"User {current_user.id} message: {user_message[:100]}")
     
-    # Return streaming response
+    # Return streaming response with conversation history for context
     # Use text/event-stream for SSE format (AI SDK expects this)
     return StreamingResponse(
-        stream_response_generator(user_message, current_user.id),
+        stream_response_generator(user_message, current_user.id, request.messages),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

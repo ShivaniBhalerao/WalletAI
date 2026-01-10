@@ -22,6 +22,10 @@ dependencies = [
     "sentry-sdk[fastapi]<2.0.0,>=1.40.6",
     "pyjwt<3.0.0,>=2.8.0",
     "plaid-python>=38.0.0",
+    # LangChain and LangGraph dependencies
+    "langchain-core>=0.3.0",
+    "langchain-google-genai>=2.0.0",
+    "langgraph>=0.2.0",
 ]
 
 [tool.uv]
