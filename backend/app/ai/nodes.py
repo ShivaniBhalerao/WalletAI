@@ -264,7 +264,7 @@ def generate_response_node(state: FinancialAgentState) -> FinancialAgentState:
             },
             "error": None,
             # Store the response temporarily - will be added to messages in format node
-            "_generated_response": generated_response,
+            "generated_response": generated_response,
         }
         
     except Exception as e:
@@ -321,8 +321,8 @@ def format_response_node(state: FinancialAgentState) -> FinancialAgentState:
             logger.info("Using clarification question as response")
         
         # Check if we have a generated response
-        elif state.get("_generated_response"):
-            response_text = state["_generated_response"]
+        elif state.get("generated_response"):
+            response_text = state["generated_response"]
             logger.info("Using generated response")
         
         else:
@@ -337,6 +337,7 @@ def format_response_node(state: FinancialAgentState) -> FinancialAgentState:
         
         # Clean up temporary fields
         cleaned_state = {k: v for k, v in state.items() if not k.startswith("_")}
+        cleaned_state["generated_response"] = None  # Clear the temporary response
         
         logger.info(f"Response formatted successfully, total messages: {len(updated_messages)}")
         
