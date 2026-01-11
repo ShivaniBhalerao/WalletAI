@@ -39,6 +39,7 @@ class FinancialAgentState(TypedDict):
     clarification_question: str | None
     context: dict[str, Any]
     error: str | None
+    generated_response: str | None  # Temporary storage for response between nodes
 
 
 # Intent types that the agent can recognize
@@ -76,5 +77,6 @@ def create_initial_state(user_id: uuid.UUID, messages: list[BaseMessage]) -> Fin
         clarification_question=None,
         context={},
         error=None,
+        generated_response=None,
     )
 
