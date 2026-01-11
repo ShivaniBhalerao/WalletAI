@@ -68,29 +68,31 @@ Guidelines:
 - Consider the conversation history in your analysis"""
 
 # Response Generation Prompt
-RESPONSE_GENERATION_PROMPT = """Generate a helpful response as a financial analyst based on the user's query and extracted intent.
+RESPONSE_GENERATION_PROMPT = """Generate a helpful response as a financial analyst based on the user's query, extracted intent, and REAL financial data from their account.
 
 User Query: {message}
 
 Intent: {intent}
 Entities: {entities}
 Keywords: {keywords}
+Financial Data: {financial_data}
 Context: {context}
 
 Guidelines for your response:
-1. Address the user's specific question directly
-2. Use mock data patterns that sound realistic (you don't have access to real transaction data yet)
-3. For spending queries: Provide approximate amounts, percentages, and breakdowns
-4. For comparisons: Show month-over-month or period-over-period changes
-5. For savings: Offer 2-3 specific, actionable suggestions
-6. For unclear queries: Ask a clarifying question to better understand their needs
-7. Keep your response conversational and natural
+1. Address the user's specific question directly using the provided financial data
+2. Use the REAL data from the "Financial Data" section - these are actual amounts from their transactions
+3. For spending queries: Present the actual amounts, percentages, and breakdowns from the data
+4. For comparisons: Show the real month-over-month or period-over-period changes from the data
+5. For category breakdowns: List the actual categories and amounts from the data
+6. If the financial data shows no transactions or zero amounts, acknowledge this honestly (e.g., "I don't see any transactions in this category yet")
+7. Keep your response conversational and natural while being factually accurate to the data
 8. Use formatting (lists, line breaks) for readability
-9. End with a relevant follow-up question or suggestion when appropriate
+9. End with a relevant follow-up question or actionable suggestion when appropriate
+10. Use emojis sparingly (💰 🏦 📊 💳 📈 📉) to enhance readability
 
-Remember: You're providing realistic mock responses. The user knows this is a demonstration system.
+Important: Always base your response on the actual financial data provided. Do not make up numbers or patterns.
 
-Generate a natural, helpful response:"""
+Generate a natural, helpful, and data-driven response:"""
 
 
 # Clarification Question Prompt

@@ -6,6 +6,7 @@ Each node represents a step in the agent's processing pipeline
 
 import json
 import logging
+from datetime import date
 from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
@@ -20,6 +21,15 @@ from app.ai.prompts import (
     RESPONSE_GENERATION_PROMPT,
 )
 from app.ai.state import FinancialAgentState
+from app.ai.tools import (
+    compare_spending_periods,
+    get_category_breakdown,
+    get_month_date_range,
+    get_transactions,
+    parse_time_period,
+    query_spending_by_category,
+    query_spending_by_time_period,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -143,6 +153,157 @@ def analyze_intent_node(state: FinancialAgentState) -> FinancialAgentState:
         }
 
 
+def fetch_financial_data_node(state: FinancialAgentState) -> FinancialAgentState:
+    """
+    Node 2: Fetch financial data from database
+    
+    This node queries the database based on the extracted intent and entities
+    to retrieve relevant financial data for the user's query.
+    
+    Args:
+        state: Current agent state
+        
+    Returns:
+        Updated state with financial_data populated
+    """
+    logger.info(f"Executing fetch_financial_data_node for user {state['user_id']}")
+    
+    try:
+        intent = state.get("intent", "general_question")
+        entities = state.get("entities", {})
+        session = state["session"]
+        user_id = state["user_id"]
+        
+        financial_data = {}
+        
+        # Parse time period from entities
+        time_period = entities.get("time_period", "this_month")
+        start_date, end_date = parse_time_period(time_period)
+        
+        logger.info(f"Fetching data for intent: {intent}, time_period: {time_period}")
+        
+        # Fetch data based on intent
+        if intent == "spending_query":
+            # User asking about spending in a specific category
+            categories = entities.get("categories", [])
+            
+            if categories:
+                # Query spending for the first category mentioned
+                category = categories[0]
+                data = query_spending_by_category(
+                    session=session,
+                    user_id=user_id,
+                    category=category,
+                    start_date=start_date,
+                    end_date=end_date
+                )
+                financial_data = {
+                    "type": "category_spending",
+                    "data": data
+                }
+            else:
+                # No specific category, get overall spending
+                data = query_spending_by_time_period(
+                    session=session,
+                    user_id=user_id,
+                    start_date=start_date,
+                    end_date=end_date
+                )
+                financial_data = {
+                    "type": "period_spending",
+                    "data": data
+                }
+        
+        elif intent == "spending_comparison":
+            # User comparing spending across periods
+            # Default to comparing this month vs last month
+            period1_start, period1_end = get_month_date_range(0)
+            period2_start, period2_end = get_month_date_range(1)
+            
+            # Override with entities if provided
+            if entities.get("comparison"):
+                # Try to parse custom comparison periods
+                pass  # Use defaults for now
+            
+            data = compare_spending_periods(
+                session=session,
+                user_id=user_id,
+                period1_start=period1_start,
+                period1_end=period1_end,
+                period2_start=period2_start,
+                period2_end=period2_end
+            )
+            financial_data = {
+                "type": "spending_comparison",
+                "data": data
+            }
+        
+        elif intent == "category_analysis":
+            # User asking for spending breakdown by category
+            data = get_category_breakdown(
+                session=session,
+                user_id=user_id,
+                start_date=start_date,
+                end_date=end_date
+            )
+            financial_data = {
+                "type": "category_breakdown",
+                "data": data
+            }
+        
+        elif intent == "transaction_query":
+            # User asking about specific transactions
+            categories = entities.get("categories", [])
+            merchants = entities.get("merchants", [])
+            
+            category = categories[0] if categories else None
+            merchant = merchants[0] if merchants else None
+            
+            data = get_transactions(
+                session=session,
+                user_id=user_id,
+                category=category,
+                merchant=merchant,
+                start_date=start_date,
+                end_date=end_date,
+                limit=10
+            )
+            financial_data = {
+                "type": "transactions",
+                "data": {"transactions": data}
+            }
+        
+        else:
+            # For general questions or other intents, fetch category breakdown as context
+            data = get_category_breakdown(
+                session=session,
+                user_id=user_id,
+                start_date=start_date,
+                end_date=end_date
+            )
+            financial_data = {
+                "type": "general",
+                "data": data
+            }
+        
+        logger.info(f"Fetched financial data: type={financial_data.get('type')}")
+        
+        return {
+            **state,
+            "financial_data": financial_data,
+            "error": None,
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in fetch_financial_data_node: {e}", exc_info=True)
+        # Continue without data - the response node will handle missing data
+        return {
+            **state,
+            "financial_data": {"type": "error", "data": {}},
+            "error": None,  # Don't propagate as error, just use empty data
+        }
+
+
 def generate_clarification_node(state: FinancialAgentState) -> FinancialAgentState:
     """
     Node 2a: Generate a clarifying question
@@ -203,10 +364,10 @@ def generate_clarification_node(state: FinancialAgentState) -> FinancialAgentSta
 
 def generate_response_node(state: FinancialAgentState) -> FinancialAgentState:
     """
-    Node 2b: Generate financial analyst response
+    Node 3: Generate financial analyst response
     
     This node generates the main response to the user's query based on
-    the extracted intent and entities.
+    the extracted intent, entities, and fetched financial data.
     
     Args:
         state: Current agent state
@@ -225,13 +386,15 @@ def generate_response_node(state: FinancialAgentState) -> FinancialAgentState:
         entities = state.get("entities", {})
         keywords = state.get("keywords", [])
         context = state.get("context", {})
+        financial_data = state.get("financial_data", {})
         
-        # Build response generation prompt
+        # Build response generation prompt with financial data
         prompt = RESPONSE_GENERATION_PROMPT.format(
             message=last_message,
             intent=intent,
             entities=json.dumps(entities) if entities else "None",
             keywords=", ".join(keywords) if keywords else "None",
+            financial_data=json.dumps(financial_data, default=str) if financial_data else "No data available",
             context=json.dumps(context) if context else "No previous context"
         )
         
@@ -277,7 +440,7 @@ def generate_response_node(state: FinancialAgentState) -> FinancialAgentState:
 
 def format_response_node(state: FinancialAgentState) -> FinancialAgentState:
     """
-    Node 3: Format final response
+    Node 4: Format final response
     
     This node takes either the clarification question or generated response
     and formats it as an AI message to be added to the conversation.

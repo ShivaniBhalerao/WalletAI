@@ -16,7 +16,7 @@ from pydantic import BaseModel
 
 from app.ai.agent import process_message
 from app.ai.config import AIConfig
-from app.api.deps import CurrentUser
+from app.api.deps import CurrentUser, SessionDep
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -57,6 +57,7 @@ class ChatRequest(BaseModel):
 async def generate_agent_response(
     user_message: str, 
     user_id: uuid.UUID,
+    session: SessionDep,
     conversation_history: list[ChatMessage] | None = None
 ) -> str:
     """
@@ -65,6 +66,7 @@ async def generate_agent_response(
     Args:
         user_message: The user's input message
         user_id: The authenticated user's UUID
+        session: Database session for querying financial data
         conversation_history: Optional conversation history for context
         
     Returns:
@@ -92,10 +94,11 @@ async def generate_agent_response(
         if not messages or messages[-1].content != user_message:
             messages.append(HumanMessage(content=user_message))
         
-        # Process through agent
+        # Process through agent with database session
         result = process_message(
             user_id=user_id,
-            messages=messages
+            messages=messages,
+            session=session
         )
         
         # Extract response
@@ -188,6 +191,7 @@ async def generate_mock_response(user_message: str, user_id: uuid.UUID) -> str:
 async def stream_response_generator(
     user_message: str, 
     user_id: uuid.UUID,
+    session: SessionDep,
     conversation_history: list[ChatMessage] | None = None
 ):
     """
@@ -202,13 +206,14 @@ async def stream_response_generator(
     Args:
         user_message: The user's input message
         user_id: The authenticated user's ID
+        session: Database session for querying financial data
         
     Yields:
         JSON chunks in NDJSON format (newline-delimited JSON)
     """
     try:
         # Generate the full response using agent
-        full_response = await generate_agent_response(user_message, user_id, conversation_history)
+        full_response = await generate_agent_response(user_message, user_id, session, conversation_history)
         
         # Generate a unique message ID
         message_id = str(uuid.uuid4())
@@ -262,6 +267,7 @@ async def stream_response_generator(
 async def chat_endpoint(
     request: ChatRequest,
     current_user: CurrentUser,
+    session: SessionDep,
 ) -> StreamingResponse:
     """
     Chat endpoint for financial queries
@@ -272,6 +278,7 @@ async def chat_endpoint(
     Args:
         request: ChatRequest with message history
         current_user: Authenticated user from JWT token
+        session: Database session for querying financial data
         
     Returns:
         StreamingResponse with NDJSON content
@@ -306,10 +313,10 @@ async def chat_endpoint(
     # Log chat interaction
     logger.debug(f"User {current_user.id} message: {user_message[:100]}")
     
-    # Return streaming response with conversation history for context
+    # Return streaming response with conversation history and session for context
     # Use text/event-stream for SSE format (AI SDK expects this)
     return StreamingResponse(
-        stream_response_generator(user_message, current_user.id, request.messages),
+        stream_response_generator(user_message, current_user.id, session, request.messages),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
