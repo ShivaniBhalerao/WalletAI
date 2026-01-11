@@ -10,10 +10,12 @@ from typing import Literal
 
 from langchain_core.messages import BaseMessage, HumanMessage
 from langgraph.graph import END, StateGraph
+from sqlmodel import Session
 
 from app.ai.config import AIConfig
 from app.ai.nodes import (
     analyze_intent_node,
+    fetch_financial_data_node,
     format_response_node,
     generate_clarification_node,
     generate_response_node,
@@ -23,25 +25,25 @@ from app.ai.state import FinancialAgentState, create_initial_state
 logger = logging.getLogger(__name__)
 
 
-def should_clarify(state: FinancialAgentState) -> Literal["clarify", "respond"]:
+def should_clarify(state: FinancialAgentState) -> Literal["clarify", "fetch_data"]:
     """
     Conditional edge function to determine if clarification is needed
     
     Routes to clarification node if the user's intent is unclear,
-    otherwise routes to response generation.
+    otherwise routes to data fetching.
     
     Args:
         state: Current agent state
         
     Returns:
-        "clarify" if clarification needed, "respond" otherwise
+        "clarify" if clarification needed, "fetch_data" otherwise
     """
     logger.info("Evaluating conditional edge: should_clarify")
     
-    # If there's an error, skip clarification and go straight to response
+    # If there's an error, skip clarification and go to fetch data
     if state.get("error"):
-        logger.info("Error detected, routing to respond")
-        return "respond"
+        logger.info("Error detected, routing to fetch_data")
+        return "fetch_data"
     
     # Check if clarification is needed and enabled
     needs_clarification = state.get("needs_clarification", False)
@@ -55,8 +57,8 @@ def should_clarify(state: FinancialAgentState) -> Literal["clarify", "respond"]:
         logger.info("Clarification needed, routing to clarify")
         return "clarify"
     
-    logger.info("No clarification needed, routing to respond")
-    return "respond"
+    logger.info("No clarification needed, routing to fetch_data")
+    return "fetch_data"
 
 
 def build_financial_agent() -> StateGraph:
@@ -65,8 +67,10 @@ def build_financial_agent() -> StateGraph:
     
     This function constructs the agent graph with the following flow:
     1. analyze_intent_node: Extracts intent and entities from user message
-    2. Conditional routing: Either ask for clarification or generate response
-    3. format_response_node: Formats the final response
+    2. Conditional routing: Either ask for clarification or fetch data
+    3. fetch_financial_data_node: Queries database for relevant financial data
+    4. generate_response_node: Generates response using fetched data
+    5. format_response_node: Formats the final response
     
     Returns:
         Compiled LangGraph StateGraph ready for execution
@@ -92,6 +96,7 @@ def build_financial_agent() -> StateGraph:
     
     # Add nodes to the graph
     workflow.add_node("analyze_intent", analyze_intent_node)
+    workflow.add_node("fetch_financial_data", fetch_financial_data_node)
     workflow.add_node("generate_clarification", generate_clarification_node)
     workflow.add_node("generate_response", generate_response_node)
     workflow.add_node("format_response", format_response_node)
@@ -100,15 +105,18 @@ def build_financial_agent() -> StateGraph:
     workflow.set_entry_point("analyze_intent")
     
     # Add conditional edges
-    # After analyzing intent, decide whether to clarify or respond
+    # After analyzing intent, decide whether to clarify or fetch data
     workflow.add_conditional_edges(
         "analyze_intent",
         should_clarify,
         {
             "clarify": "generate_clarification",
-            "respond": "generate_response",
+            "fetch_data": "fetch_financial_data",
         },
     )
+    
+    # After fetching data, generate response
+    workflow.add_edge("fetch_financial_data", "generate_response")
     
     # After generating clarification, format and end
     workflow.add_edge("generate_clarification", "format_response")
@@ -132,6 +140,7 @@ def build_financial_agent() -> StateGraph:
 def process_message(
     user_id: uuid.UUID,
     messages: list[BaseMessage],
+    session: Session,
     conversation_context: dict | None = None
 ) -> FinancialAgentState:
     """
@@ -143,6 +152,7 @@ def process_message(
     Args:
         user_id: UUID of the authenticated user
         messages: List of conversation messages (LangChain format)
+        session: Database session for querying financial data
         conversation_context: Optional additional context to pass to the agent
         
     Returns:
@@ -155,7 +165,7 @@ def process_message(
     Example:
         >>> from langchain_core.messages import HumanMessage
         >>> messages = [HumanMessage(content="How much did I spend on groceries?")]
-        >>> result = process_message(user_id=uuid.uuid4(), messages=messages)
+        >>> result = process_message(user_id=uuid.uuid4(), messages=messages, session=session)
         >>> print(result["messages"][-1].content)  # AI response
     """
     logger.info(f"Processing message for user {user_id}, message count: {len(messages)}")
@@ -175,8 +185,8 @@ def process_message(
         # Build the agent
         agent = build_financial_agent()
         
-        # Create initial state
-        initial_state = create_initial_state(user_id=user_id, messages=messages)
+        # Create initial state with session
+        initial_state = create_initial_state(user_id=user_id, messages=messages, session=session)
         
         # Add any additional context
         if conversation_context:
@@ -207,7 +217,7 @@ def process_message(
         logger.error(f"Error processing message: {e}", exc_info=True)
         
         # Create error state
-        error_state = create_initial_state(user_id=user_id, messages=messages)
+        error_state = create_initial_state(user_id=user_id, messages=messages, session=session)
         error_state["error"] = str(e)
         
         # Try to format a user-friendly error response
@@ -224,7 +234,7 @@ def process_message(
         return error_state
 
 
-def process_message_simple(user_id: uuid.UUID, message_text: str) -> str:
+def process_message_simple(user_id: uuid.UUID, message_text: str, session: Session) -> str:
     """
     Simplified interface for processing a single message
     
@@ -233,12 +243,13 @@ def process_message_simple(user_id: uuid.UUID, message_text: str) -> str:
     Args:
         user_id: UUID of the authenticated user
         message_text: The user's message as plain text
+        session: Database session for querying financial data
         
     Returns:
         The agent's response as plain text
         
     Example:
-        >>> response = process_message_simple(user_id=uuid.uuid4(), message_text="Show my spending")
+        >>> response = process_message_simple(user_id=uuid.uuid4(), message_text="Show my spending", session=session)
         >>> print(response)
     """
     logger.info(f"Processing simple message for user {user_id}")
@@ -247,7 +258,7 @@ def process_message_simple(user_id: uuid.UUID, message_text: str) -> str:
     message = HumanMessage(content=message_text)
     
     # Process through agent
-    result = process_message(user_id=user_id, messages=[message])
+    result = process_message(user_id=user_id, messages=[message], session=session)
     
     # Extract response text
     if result["messages"]:

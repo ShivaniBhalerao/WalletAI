@@ -8,6 +8,7 @@ import uuid
 from typing import Annotated, Any, TypedDict
 
 from langchain_core.messages import BaseMessage
+from sqlmodel import Session
 
 
 class FinancialAgentState(TypedDict):
@@ -21,22 +22,26 @@ class FinancialAgentState(TypedDict):
         messages: List of conversation messages in LangChain format
                   (HumanMessage, AIMessage, SystemMessage)
         user_id: UUID of the authenticated user
+        session: Database session for querying financial data
         intent: Extracted user intent (spending_query, comparison, etc.)
         entities: Extracted entities from user message (categories, amounts, dates)
         keywords: Key terms extracted from the message
         needs_clarification: Whether the agent needs to ask for clarification
         clarification_question: The clarification question to ask (if needed)
+        financial_data: Results from database queries (spending data, transactions, etc.)
         context: Additional session context (metadata, previous intents, etc.)
         error: Error message if something goes wrong
     """
     
     messages: Annotated[list[BaseMessage], "Conversation message history"]
     user_id: uuid.UUID
+    session: Session
     intent: str | None
     entities: dict[str, Any] | None
     keywords: list[str] | None
     needs_clarification: bool
     clarification_question: str | None
+    financial_data: dict[str, Any] | None
     context: dict[str, Any]
     error: str | None
     generated_response: str | None  # Temporary storage for response between nodes
@@ -56,13 +61,18 @@ INTENT_TYPES = {
 }
 
 
-def create_initial_state(user_id: uuid.UUID, messages: list[BaseMessage]) -> FinancialAgentState:
+def create_initial_state(
+    user_id: uuid.UUID, 
+    messages: list[BaseMessage],
+    session: Session
+) -> FinancialAgentState:
     """
     Create initial agent state for a new conversation turn
     
     Args:
         user_id: The authenticated user's UUID
         messages: Initial message history
+        session: Database session for querying financial data
         
     Returns:
         FinancialAgentState with default values
@@ -70,11 +80,13 @@ def create_initial_state(user_id: uuid.UUID, messages: list[BaseMessage]) -> Fin
     return FinancialAgentState(
         messages=messages,
         user_id=user_id,
+        session=session,
         intent=None,
         entities=None,
         keywords=None,
         needs_clarification=False,
         clarification_question=None,
+        financial_data=None,
         context={},
         error=None,
         generated_response=None,
