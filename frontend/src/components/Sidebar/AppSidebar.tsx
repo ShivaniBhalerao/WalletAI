@@ -1,4 +1,4 @@
-import { Briefcase, Home, MessageCircle, Users } from "lucide-react"
+import { Home, MessageCircle, Users } from "lucide-react"
 
 import { SidebarAppearance } from "@/components/Common/Appearance"
 import { Logo } from "@/components/Common/Logo"
