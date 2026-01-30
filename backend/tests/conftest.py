@@ -9,7 +9,6 @@ from app.core.db import engine, init_db
 from app.main import app
 from app.models import (  # noqa: F401 - Import all models to register them with SQLModel
     Account,
-    Item,
     PlaidItem,
     Transaction,
     User,

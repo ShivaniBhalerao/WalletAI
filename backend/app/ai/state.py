@@ -5,6 +5,7 @@ Defines the state structure used throughout the LangGraph agent execution
 """
 
 import uuid
+from operator import add
 from typing import Annotated, Any, TypedDict
 
 from langchain_core.messages import BaseMessage
@@ -21,6 +22,7 @@ class FinancialAgentState(TypedDict):
     Attributes:
         messages: List of conversation messages in LangChain format
                   (HumanMessage, AIMessage, SystemMessage)
+                  Uses operator.add to append new messages to the list
         user_id: UUID of the authenticated user
         session: Database session for querying financial data
         intent: Extracted user intent (spending_query, comparison, etc.)
@@ -33,7 +35,8 @@ class FinancialAgentState(TypedDict):
         error: Error message if something goes wrong
     """
     
-    messages: Annotated[list[BaseMessage], "Conversation message history"]
+    # Use operator.add to append messages instead of replacing the entire list
+    messages: Annotated[list[BaseMessage], add]
     user_id: uuid.UUID
     session: Session
     intent: str | None
