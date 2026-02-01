@@ -71,6 +71,25 @@ def call_model_node(state: FinancialAgentState) -> dict:
         response = llm.invoke(messages_for_llm)
         
         logger.info(f"LLM response received, type: {type(response)}")
+        logger.info(f"LLM response content type: {type(response.content)}")
+        logger.info(f"LLM response content: {response.content}")
+        
+        # Check if response has tool calls
+        if hasattr(response, "tool_calls") and response.tool_calls:
+            logger.info(f"LLM response includes {len(response.tool_calls)} tool calls")
+            for idx, tool_call in enumerate(response.tool_calls):
+                logger.debug(f"Tool call {idx + 1}: {tool_call.get('name', 'unknown')} with args: {tool_call.get('args', {})}")
+        else:
+            logger.info("LLM response has no tool calls")
+        
+        # Log response content for debugging
+        if isinstance(response.content, str):
+            logger.debug(f"LLM string response (first 200 chars): {response.content[:200]}")
+        elif isinstance(response.content, list):
+            logger.warning(f"LLM response content is a list with {len(response.content)} items")
+            logger.debug(f"LLM list response items: {response.content}")
+        else:
+            logger.warning(f"LLM response content is unexpected type: {type(response.content)}")
         
         # Return ONLY the new response message - LangGraph will append it to state
         return {
@@ -354,8 +373,17 @@ def process_message(
             
             # Log the response for debugging
             if result["messages"]:
-                last_response = result["messages"][-1].content
-                logger.debug(f"Agent response: {last_response[:200]}...")
+                last_message = result["messages"][-1]
+                last_response = last_message.content
+                logger.info(f"Final agent message type: {type(last_message)}")
+                logger.info(f"Final agent content type: {type(last_response)}")
+                
+                if isinstance(last_response, str):
+                    logger.debug(f"Agent response (first 200 chars): {last_response[:200]}...")
+                elif isinstance(last_response, list):
+                    logger.warning(f"Agent response is a list with {len(last_response)} items: {last_response}")
+                else:
+                    logger.warning(f"Agent response is unexpected type: {type(last_response)}")
             
             return result
         finally:

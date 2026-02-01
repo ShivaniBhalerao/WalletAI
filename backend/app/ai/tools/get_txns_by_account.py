@@ -85,7 +85,7 @@ def get_transactions_by_account(
         account_query = (
             select(Account)
             .where(Account.user_id == user_id)
-            .where(Account.type.ilike(f"%{account_type_normalized}%"))
+            .where(Account.name.ilike(f"%{account_type_normalized}%"))
         )
         
         accounts = session.exec(account_query).all()
