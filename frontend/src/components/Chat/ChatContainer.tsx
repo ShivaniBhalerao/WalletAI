@@ -10,6 +10,33 @@ import { LoadingIndicator } from './LoadingIndicator';
 import { Message } from './Message';
 
 /**
+ * Suggested prompts for the chat interface
+ * These prompts help users understand what they can ask the financial assistant
+ */
+const SUGGESTED_PROMPTS = [
+  {
+    emoji: '🛒',
+    text: 'How much did I spend on groceries last month?',
+    description: 'View spending by category'
+  },
+  {
+    emoji: '☕',
+    text: 'Show me all my Starbucks purchases',
+    description: 'See transactions by merchant'
+  },
+  {
+    emoji: '💳',
+    text: 'What did I spend from my credit card this week?',
+    description: 'Check account-specific spending'
+  },
+  {
+    emoji: '📅',
+    text: 'Show me transactions from last week',
+    description: 'View transactions by date'
+  }
+];
+
+/**
  * ChatContainer is the main chat interface component
  * Uses Vercel AI SDK's useChat hook for streaming responses
  * Integrates with existing authentication (access_token from localStorage)
@@ -63,6 +90,15 @@ export function ChatContainer() {
     setInput('');
   };
 
+  /**
+   * Handle clicking on a suggested prompt
+   * Populates the input field with the prompt text
+   */
+  const handlePromptClick = (promptText: string) => {
+    if (isLoading) return;
+    setInput(promptText);
+  };
+
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -103,21 +139,25 @@ export function ChatContainer() {
                     Try asking:
                   </p>
                   <div className="space-y-2 text-left">
-                    <Card className="p-3 hover:bg-accent/50 transition-colors cursor-pointer">
-                      <p className="text-sm text-foreground">
-                        💰 How much did I spend on groceries last month?
-                      </p>
-                    </Card>
-                    <Card className="p-3 hover:bg-accent/50 transition-colors cursor-pointer">
-                      <p className="text-sm text-foreground">
-                        📊 What's my highest spending category?
-                      </p>
-                    </Card>
-                    <Card className="p-3 hover:bg-accent/50 transition-colors cursor-pointer">
-                      <p className="text-sm text-foreground">
-                        📈 Compare my spending this month vs last month
-                      </p>
-                    </Card>
+                    {SUGGESTED_PROMPTS.map((prompt, index) => (
+                      <Card 
+                        key={index}
+                        className="p-3 hover:bg-accent/50 transition-colors cursor-pointer"
+                        onClick={() => handlePromptClick(prompt.text)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            handlePromptClick(prompt.text);
+                          }
+                        }}
+                      >
+                        <p className="text-sm text-foreground">
+                          {prompt.emoji} {prompt.text}
+                        </p>
+                      </Card>
+                    ))}
                   </div>
                 </div>
               </div>

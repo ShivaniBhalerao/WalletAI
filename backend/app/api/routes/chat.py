@@ -103,7 +103,28 @@ async def generate_agent_response(
         
         # Extract response
         if result["messages"]:
-            response = result["messages"][-1].content
+            response_message = result["messages"][-1]
+            response = response_message.content
+            
+            # Log response details for debugging
+            logger.info(f"Agent response message type: {type(response_message)}")
+            logger.info(f"Agent response content type: {type(response)}")
+            
+            # Handle case where content is a list (multi-part message)
+            if isinstance(response, list):
+                logger.warning(f"Response content is a list with {len(response)} items: {response}")
+                # Extract text from list of content blocks
+                text_parts = []
+                for item in response:
+                    if isinstance(item, dict) and "text" in item:
+                        text_parts.append(item["text"])
+                    elif isinstance(item, str):
+                        text_parts.append(item)
+                    else:
+                        logger.warning(f"Unexpected content item type: {type(item)}, value: {item}")
+                response = " ".join(text_parts) if text_parts else "I apologize, but I couldn't generate a proper response."
+                logger.info(f"Converted list response to string: {response[:100]}...")
+            
             logger.info(f"Agent response generated: {len(response)} characters")
             return response
         else:
