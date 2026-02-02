@@ -71,6 +71,26 @@ The application will be available at:
 - Backend API: http://localhost:8000
 - API Docs: http://localhost:8000/docs
 
+### 4. Log In to Admin Account
+
+Use the default superuser credentials (configured in `.env`):
+
+| Field | Default Value |
+|-------|---------------|
+| Email | `admin@example.com` |
+| Password | `changethis` |
+
+> **Important**: Change these credentials before deploying to production by updating `FIRST_SUPERUSER` and `FIRST_SUPERUSER_PASSWORD` in your `.env` file.
+
+### 5. Connect Your Bank
+
+1. Navigate to the **Accounts** page
+2. Click **Link Bank Account**
+3. Follow the Plaid Link flow to connect your bank
+4. For Sandbox testing, use Plaid's test credentials:
+   - Username: `user_good`
+   - Password: `pass_good`
+
 ---
 
 ## Getting API Keys
