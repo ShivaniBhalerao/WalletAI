@@ -2,6 +2,16 @@
 
 WalletAI is an intelligent personal finance assistant that connects to your bank accounts via Plaid and uses Google Gemini AI to answer questions about your spending habits, transactions, and financial patterns through natural language conversations.
 
+### Chat Interface
+<!-- Add screenshot: Chat interface with AI assistant -->
+![Chat Interface](img/chat-interface.png)
+
+### Transaction Insights
+<!-- Add screenshot: AI response showing transaction analysis -->
+![Transaction Insights](img/transaction-insights.png)
+
+---
+
 ## How It Works
 
 1. **Connect Your Bank** - Users link their bank accounts through Plaid's secure connection flow
